@@ -224,7 +224,8 @@
                         :r
                         (if (empty? (:float state))
                           0.5
-                          (first (:float state))))
+                          (mean [(:r (first (:auxiliary state)))
+                                 (first (:float state))])))
                  :auxiliary
                  (pop-item :float (pop-item :auxiliary state))))))
 
@@ -237,7 +238,8 @@
                         :g
                         (if (empty? (:float state))
                           0.5
-                          (first (:float state))))
+                          (mean [(:g (first (:auxiliary state)))
+                                 (first (:float state))])))
                  :auxiliary
                  (pop-item :float (pop-item :auxiliary state))))))
 
@@ -250,7 +252,8 @@
                         :b
                         (if (empty? (:float state))
                           0.5
-                          (first (:float state))))
+                          (mean [(:b (first (:auxiliary state)))
+                                 (first (:float state))])))
                  :auxiliary
                  (pop-item :float (pop-item :auxiliary state))))))
 
