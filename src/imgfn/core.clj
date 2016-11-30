@@ -161,7 +161,7 @@
   [program x y]
   (first (:auxiliary (run-push program
                                (->> (make-push-state)
-                                 (push-item {:r 0.0 :g 0.0 :b 0.0} :auxiliary)
+                                 (push-item {:r 0.5 :g 0.5 :b 0.5} :auxiliary)
                                  (push-item (scale-y y) :input)
                                  (push-item (scale-x x) :input))))))
 
@@ -223,7 +223,7 @@
       (push-item (assoc (first (:auxiliary state))
                         :r
                         (if (empty? (:float state))
-                          0.0
+                          0.5
                           (first (:float state))))
                  :auxiliary
                  (pop-item :float (pop-item :auxiliary state))))))
@@ -236,7 +236,7 @@
       (push-item (assoc (first (:auxiliary state))
                         :g
                         (if (empty? (:float state))
-                          0.0
+                          0.5
                           (first (:float state))))
                  :auxiliary
                  (pop-item :float (pop-item :auxiliary state))))))
@@ -249,7 +249,7 @@
       (push-item (assoc (first (:auxiliary state))
                         :b
                         (if (empty? (:float state))
-                          0.0
+                          0.5
                           (first (:float state))))
                  :auxiliary
                  (pop-item :float (pop-item :auxiliary state))))))
