@@ -213,49 +213,48 @@
                  [(fdiff (stdev (apply concat (map first results-targets)))
                          (stdev (apply concat (map second results-targets))))]
                  ))))
-                 
 
 (when-not (contains? @instruction-table 'r)
   (define-registered
     r
     ^{:stack-types [:float]}
     (fn [state]
-      (push-item (assoc (first (:auxiliary state))
-                        :r
-                        (if (empty? (:float state))
-                          0.5
-                          (mean [(:r (first (:auxiliary state)))
-                                 (first (:float state))])))
-                 :auxiliary
-                 (pop-item :float (pop-item :auxiliary state))))))
+      (if (empty? (rest (:float state)))
+        state
+        (push-item (assoc (first (:auxiliary state))
+                     :r
+                     (mean [(:r (first (:auxiliary state)))
+                            (first (:float state))]))
+                   :auxiliary
+                   (pop-item :float (pop-item :auxiliary state)))))))
 
 (when-not (contains? @instruction-table 'g)
   (define-registered
     g
     ^{:stack-types [:float]}
     (fn [state]
-      (push-item (assoc (first (:auxiliary state))
-                        :g
-                        (if (empty? (:float state))
-                          0.5
-                          (mean [(:g (first (:auxiliary state)))
-                                 (first (:float state))])))
-                 :auxiliary
-                 (pop-item :float (pop-item :auxiliary state))))))
+      (if (empty? (rest (:float state)))
+        state
+        (push-item (assoc (first (:auxiliary state))
+                     :g
+                     (mean [(:g (first (:auxiliary state)))
+                            (first (:float state))]))
+                   :auxiliary
+                   (pop-item :float (pop-item :auxiliary state)))))))
 
 (when-not (contains? @instruction-table 'b)
   (define-registered
     b
     ^{:stack-types [:float]}
     (fn [state]
-      (push-item (assoc (first (:auxiliary state))
-                        :b
-                        (if (empty? (:float state))
-                          0.5
-                          (mean [(:b (first (:auxiliary state)))
-                                 (first (:float state))])))
-                 :auxiliary
-                 (pop-item :float (pop-item :auxiliary state))))))
+      (if (empty? (rest (:float state)))
+        state
+        (push-item (assoc (first (:auxiliary state))
+                     :b
+                     (mean [(:b (first (:auxiliary state)))
+                            (first (:float state))]))
+                   :auxiliary
+                   (pop-item :float (pop-item :auxiliary state)))))))
 
 (defn error-deviation
   [i argmap]
