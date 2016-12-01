@@ -196,23 +196,24 @@
 
 (defn third [coll] (nth coll 2))
 
+;; INCLUDE both value error and distinctiveness error for each xy pair
+
 (defn imgfn-errors
   [program]
-  (let [results-targets (for [x (range (count distilled-image)) 
-                              y (range (count (first distilled-image)))]
-                          [((fn [rgb-map]
-                              (mapv #(mod % 1.0)
-                                    [(:r rgb-map)(:g rgb-map)(:b rgb-map)]))
-                            (program-result program x y))
-                           (nth (nth distilled-image y) x)])
-        differences (apply concat
-                           (mapv (fn [[result-rgb target-rgb]]
-                                   (mapv fdiff result-rgb target-rgb))
-                                 results-targets))]
-    (vec (concat differences
-                 [(fdiff (stdev (apply concat (map first results-targets)))
-                         (stdev (apply concat (map second results-targets))))]
-                 ))))
+  (let [x-range (range (count distilled-image))
+        y-range (range (count (first distilled-image)))
+        targets (flatten (for [x x-range y y-range]
+                           (nth (nth distilled-image y) x)))
+        results (flatten (for [x x-range y y-range]
+                           (let [result (program-result program x y)]
+                             [(:r result) (:g result) (:b result)])))
+        value-errors (mapv fdiff targets results)
+        ;target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
+        target-distinctivenesses (mapv fdiff targets (rest (rest (rest targets))))
+        ;result-distinctivenesses (mapv fdiff results (repeat (mean results)))
+        result-distinctivenesses (mapv fdiff results (rest (rest (rest results))))
+        distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)]
+    (vec (concat value-errors distinctiveness-errors))))
 
 (when-not (contains? @instruction-table 'r)
   (define-registered
