@@ -219,42 +219,51 @@
     r
     ^{:stack-types [:float]}
     (fn [state]
-      (if (empty? (rest (:float state)))
+      (if (empty? (rest (rest (:float state))))
         state
         (push-item (assoc (first (:auxiliary state))
                      :r
-                     (mean [(:r (first (:auxiliary state)))
-                            (first (:float state))]))
+                     (let [new-value (mod (Math/abs (first (:float state))) 1.0)
+                           old-value (:r (first (:auxiliary state)))
+                           intensity (mod (Math/abs (second (:float state))) 1.0)]
+                       (+ (* new-value intensity)
+                          (* old-value (- 1.0 intensity)))))
                    :auxiliary
-                   (pop-item :float (pop-item :auxiliary state)))))))
+                   (pop-item :float (pop-item :float (pop-item :auxiliary state))))))))
 
 (when-not (contains? @instruction-table 'g)
   (define-registered
     g
     ^{:stack-types [:float]}
     (fn [state]
-      (if (empty? (rest (:float state)))
+      (if (empty? (rest (rest (:float state))))
         state
         (push-item (assoc (first (:auxiliary state))
                      :g
-                     (mean [(:g (first (:auxiliary state)))
-                            (first (:float state))]))
+                     (let [new-value (mod (Math/abs (first (:float state))) 1.0)
+                           old-value (:g (first (:auxiliary state)))
+                           intensity (mod (Math/abs (second (:float state))) 1.0)]
+                       (+ (* new-value intensity)
+                          (* old-value (- 1.0 intensity)))))
                    :auxiliary
-                   (pop-item :float (pop-item :auxiliary state)))))))
+                   (pop-item :float (pop-item :float (pop-item :auxiliary state))))))))
 
 (when-not (contains? @instruction-table 'b)
   (define-registered
     b
     ^{:stack-types [:float]}
     (fn [state]
-      (if (empty? (rest (:float state)))
+      (if (empty? (rest (rest (:float state))))
         state
         (push-item (assoc (first (:auxiliary state))
                      :b
-                     (mean [(:b (first (:auxiliary state)))
-                            (first (:float state))]))
+                     (let [new-value (mod (Math/abs (first (:float state))) 1.0)
+                           old-value (:b (first (:auxiliary state)))
+                           intensity (mod (Math/abs (second (:float state))) 1.0)]
+                       (+ (* new-value intensity)
+                          (* old-value (- 1.0 intensity)))))
                    :auxiliary
-                   (pop-item :float (pop-item :auxiliary state)))))))
+                   (pop-item :float (pop-item :float (pop-item :auxiliary state))))))))
 
 (defn error-deviation
   [i argmap]
@@ -262,10 +271,10 @@
 
 (def argmap
   {:error-function imgfn-errors
-   :population-size 1000
-   :max-points 1600
-   :max-genome-size-in-initial-program 400
-   :evalpush-limit 	1600
+   :population-size 100
+   :max-points 800
+   :max-genome-size-in-initial-program 200
+   :evalpush-limit 	800
    :alternation-rate 0.01
    :atom-generators (let [instructions (registered-for-stacks [:float :boolean :exec])]
                       (apply concat (mapv #(vector %1 %2)
