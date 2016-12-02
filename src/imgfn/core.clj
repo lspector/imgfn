@@ -196,22 +196,34 @@
 
 (defn third [coll] (nth coll 2))
 
+(defn transpose
+  [linearized-matrix row-length]
+  (apply map list (partition row-length linearized-matrix)))
+
 ;; INCLUDE both value error and distinctiveness error for each xy pair
 
 (defn imgfn-errors
   [program]
   (let [x-range (range (count distilled-image))
         y-range (range (count (first distilled-image)))
-        targets (flatten (for [x x-range y y-range]
-                           (nth (nth distilled-image y) x)))
-        results (flatten (for [x x-range y y-range]
-                           (let [result (program-result program x y)]
-                             [(:r result) (:g result) (:b result)])))
+        target-rgbs (for [x x-range y y-range]
+                      (nth (nth distilled-image y) x))
+        result-rgbs (for [x x-range y y-range]
+                      (let [result (program-result program x y)]
+                        [(:r result) (:g result) (:b result)]))
+        targets (flatten target-rgbs)
+        results (flatten result-rgbs)
+        transposed-targets (flatten (transpose target-rgbs (count distilled-image)))
+        transposed-results (flatten (transpose result-rgbs (count distilled-image)))
         value-errors (mapv fdiff targets results)
         ;target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
-        target-distinctivenesses (mapv fdiff targets (rest (rest (rest targets))))
+        ;target-distinctivenesses (mapv fdiff targets (rest (rest (rest targets))))
+        target-distinctivenesses (concat (mapv fdiff targets (rest (rest (rest targets))))
+                                         (mapv fdiff transposed-targets (rest (rest (rest transposed-targets)))))
         ;result-distinctivenesses (mapv fdiff results (repeat (mean results)))
-        result-distinctivenesses (mapv fdiff results (rest (rest (rest results))))
+        ;result-distinctivenesses (mapv fdiff results (rest (rest (rest results))))
+        result-distinctivenesses (concat (mapv fdiff results (rest (rest (rest results))))
+                                         (mapv fdiff transposed-results (rest (rest (rest transposed-results)))))
         distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)]
     (vec (concat value-errors distinctiveness-errors))))
 
@@ -272,25 +284,51 @@
 
 (def argmap
   {:error-function imgfn-errors
-   :population-size 100
-   :max-points 800
-   :max-genome-size-in-initial-program 200
-   :evalpush-limit 	800
+   :population-size 1000
+   :max-points 2000
+   :max-genome-size-in-initial-program 100
+   :evalpush-limit 	2000
    :alternation-rate 0.01
-   :atom-generators (let [instructions (registered-for-stacks [:float :boolean :exec])]
-                      (apply concat (mapv #(vector %1 %2)
-                                          instructions
-                                          (cycle [(fn [] (- 1.0 (lrand 2.0)))
-                                                  'in1
-                                                  'in2
-                                                  'r
-                                                  'g
-                                                  'b]))))
+   :atom-generators (let [instructions (registered-for-stacks [:integer :float :boolean :exec])]
+                      (vec (apply concat (mapv #(vector %1 %2)
+                                               instructions
+                                               (cycle [(fn [] (- 100 (lrand-int 201)))
+                                                       (fn [] (- 1.0 (lrand 2.0)))
+                                                       'in1
+                                                       'in2
+                                                       'r
+                                                       'g
+                                                       'b])))))
    :parent-selection :epsilon-lexicase
+   :epigenetic-markers [:close :silent]
    :use-single-thread false
    :problem-specific-report imgfn-report
-   :total-error-method :rmse ;; should just affect what gets reported & sent to screen
+   ;:total-error-method :rmse ;; should just affect what gets reported & sent to screen
    ;:meta-error-categories [error-deviation]
+   :genetic-operator-probabilities {:reproduction 0.0
+                                    :alternation 0.0
+                                    :uniform-mutation 0.0
+                                    :uniform-instruction-mutation 0.0
+                                    :uniform-integer-mutation 0.0
+                                    :uniform-float-mutation 0.0
+                                    :uniform-tag-mutation 0.0
+                                    :uniform-string-mutation 0.0
+                                    :uniform-boolean-mutation 0.0
+                                    ; Similar to the old ULTRA operator:
+                                    [:alternation :uniform-mutation] 0.0
+                                    :uniform-close-mutation 0.0
+                                    :uniform-silence-mutation 0.0
+                                    :uniform-crossover 0.1
+                                    :two-point-crossover 0.0
+                                    ; A hill-climbing version of uniform-silence-mutation:
+                                    [:make-next-operator-revertable :uniform-silence-mutation] 0.0
+                                    :autoconstruction 0.0
+                                    :uniform-deletion 0.0
+                                    :uniform-addition 0.0
+                                    ;; CUSTOM
+                                    [:alternation :uniform-mutation :uniform-close-mutation :uniform-silence-mutation] 0.45
+                                    [:uniform-mutation :uniform-close-mutation :uniform-silence-mutation] 0.45
+                                    }
    })
 
 
