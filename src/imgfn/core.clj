@@ -198,7 +198,15 @@
 
 (defn transpose
   [linearized-matrix row-length]
-  (apply map list (partition row-length linearized-matrix)))
+  (vec (apply concat (apply map list (partition row-length linearized-matrix)))))
+
+(defn sq [n] (* n n))
+
+(defn dist 
+  [[r1 g1 b1][r2 g2 b2]]
+  (Math/sqrt (+ (sq (- r1 r2))
+                (sq (- g1 g2))
+                (sq (- b1 b2)))))
 
 ;; INCLUDE both value error and distinctiveness error for each xy pair
 
@@ -206,24 +214,18 @@
   [program]
   (let [x-range (range (count distilled-image))
         y-range (range (count (first distilled-image)))
-        target-rgbs (for [x x-range y y-range]
-                      (nth (nth distilled-image y) x))
-        result-rgbs (for [x x-range y y-range]
-                      (let [result (program-result program x y)]
-                        [(:r result) (:g result) (:b result)]))
-        targets (flatten target-rgbs)
-        results (flatten result-rgbs)
-        transposed-targets (flatten (transpose target-rgbs (count distilled-image)))
-        transposed-results (flatten (transpose result-rgbs (count distilled-image)))
-        value-errors (mapv fdiff targets results)
-        ;target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
-        ;target-distinctivenesses (mapv fdiff targets (rest (rest (rest targets))))
-        target-distinctivenesses (concat (mapv fdiff targets (rest (rest (rest targets))))
-                                         (mapv fdiff transposed-targets (rest (rest (rest transposed-targets)))))
-        ;result-distinctivenesses (mapv fdiff results (repeat (mean results)))
-        ;result-distinctivenesses (mapv fdiff results (rest (rest (rest results))))
-        result-distinctivenesses (concat (mapv fdiff results (rest (rest (rest results))))
-                                         (mapv fdiff transposed-results (rest (rest (rest transposed-results)))))
+        targets (for [x x-range y y-range]
+                  (nth (nth distilled-image y) x))
+        results (for [x x-range y y-range]
+                  (let [result (program-result program x y)]
+                    [(:r result) (:g result) (:b result)]))
+        transposed-targets (transpose targets (count distilled-image))
+        transposed-results (transpose results (count distilled-image))
+        value-errors (mapv dist targets results)
+        target-distinctivenesses (concat (mapv dist targets (rest targets))
+                                         (mapv dist transposed-targets (rest transposed-targets)))
+        result-distinctivenesses (concat (mapv dist results (rest results))
+                                         (mapv dist transposed-results (rest transposed-results)))
         distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)]
     (vec (concat value-errors distinctiveness-errors))))
 
@@ -284,10 +286,10 @@
 
 (def argmap
   {:error-function imgfn-errors
-   :population-size 1000
-   :max-points 2000
+   :population-size 100
+   :max-points 1000
    :max-genome-size-in-initial-program 100
-   :evalpush-limit 	2000
+   :evalpush-limit 	500
    :alternation-rate 0.01
    :atom-generators (let [instructions (registered-for-stacks [:integer :float :boolean :exec])]
                       (vec (apply concat (mapv #(vector %1 %2)
@@ -306,8 +308,8 @@
    ;:total-error-method :rmse ;; should just affect what gets reported & sent to screen
    ;:meta-error-categories [error-deviation]
    :genetic-operator-probabilities {:reproduction 0.0
-                                    :alternation 0.0
-                                    :uniform-mutation 0.0
+                                    :alternation 0.2
+                                    :uniform-mutation 0.2
                                     :uniform-instruction-mutation 0.0
                                     :uniform-integer-mutation 0.0
                                     :uniform-float-mutation 0.0
@@ -316,9 +318,9 @@
                                     :uniform-boolean-mutation 0.0
                                     ; Similar to the old ULTRA operator:
                                     [:alternation :uniform-mutation] 0.0
-                                    :uniform-close-mutation 0.0
-                                    :uniform-silence-mutation 0.0
-                                    :uniform-crossover 0.1
+                                    :uniform-close-mutation 0.2
+                                    :uniform-silence-mutation 0.2
+                                    :uniform-crossover 0.2
                                     :two-point-crossover 0.0
                                     ; A hill-climbing version of uniform-silence-mutation:
                                     [:make-next-operator-revertable :uniform-silence-mutation] 0.0
@@ -326,8 +328,8 @@
                                     :uniform-deletion 0.0
                                     :uniform-addition 0.0
                                     ;; CUSTOM
-                                    [:alternation :uniform-mutation :uniform-close-mutation :uniform-silence-mutation] 0.45
-                                    [:uniform-mutation :uniform-close-mutation :uniform-silence-mutation] 0.45
+                                    ;[:alternation :uniform-mutation :uniform-close-mutation :uniform-silence-mutation] 0.45
+                                    ;[:uniform-mutation :uniform-close-mutation :uniform-silence-mutation] 0.45
                                     }
    })
 
@@ -339,6 +341,13 @@
 ;; @@
 ;; =>
 ;;; {"type":"html","content":"<span class='clj-var'>#&#x27;imgfn.core/-main</span>","value":"#'imgfn.core/-main"}
+;; <=
+
+;; @@
+(transpose [0 1 2 3 4 5] 3)
+;; @@
+;; =>
+;;; {"type":"list-like","open":"<span class='clj-vector'>[</span>","close":"<span class='clj-vector'>]</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"},{"type":"html","content":"<span class='clj-long'>3</span>","value":"3"},{"type":"html","content":"<span class='clj-long'>1</span>","value":"1"},{"type":"html","content":"<span class='clj-long'>4</span>","value":"4"},{"type":"html","content":"<span class='clj-long'>2</span>","value":"2"},{"type":"html","content":"<span class='clj-long'>5</span>","value":"5"}],"value":"[0 3 1 4 2 5]"}
 ;; <=
 
 ;; @@
