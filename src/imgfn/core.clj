@@ -26,6 +26,10 @@
 ;; Possibly use a size-based meta-error to bias selection in favor of smaller 
 ;; programs.
 
+;; Use (always?) "call-controllable soft assignment" instructions for red,
+;; green, and blue outputs (see paper on soft assignment by McPhee, Langdon, ...?)
+;; (Call-controllability, via a second argument, may be new with this work (?).)
+
 (ns imgfn.core
   (:use clojush.ns clojure.math.numeric-tower)
   (import [java.awt Color image.BufferedImage]
