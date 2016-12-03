@@ -148,6 +148,8 @@
        (shrink)
        (byteimage->floatimage)))
 
+(def flattened-distilled-image (flatten distilled-image))
+
 (def distilled-image-height (count distilled-image))
 (def distilled-image-width (count (first distilled-image)))
 
@@ -214,18 +216,14 @@
   [program]
   (let [x-range (range (count distilled-image))
         y-range (range (count (first distilled-image)))
-        targets (for [x x-range y y-range]
-                  (nth (nth distilled-image y) x))
-        results (for [x x-range y y-range]
-                  (let [result (program-result program x y)]
-                    [(:r result) (:g result) (:b result)]))
-        transposed-targets (transpose targets (count distilled-image))
-        transposed-results (transpose results (count distilled-image))
-        value-errors (mapv dist targets results)
-        target-distinctivenesses (concat (mapv dist targets (rest targets))
-                                         (mapv dist transposed-targets (rest transposed-targets)))
-        result-distinctivenesses (concat (mapv dist results (rest results))
-                                         (mapv dist transposed-results (rest transposed-results)))
+        targets flattened-distilled-image
+        results (flatten
+                  (for [y y-range x x-range] ;; this ordering will match the flattened targets
+                    (let [result (program-result program x y)]
+                      [(:r result) (:g result) (:b result)])))
+        value-errors (mapv fdiff targets results)
+        target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
+        result-distinctivenesses (mapv fdiff results (repeat (mean results)))
         distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)]
     (vec (concat value-errors distinctiveness-errors))))
 
@@ -305,7 +303,6 @@
    :epigenetic-markers [:close :silent]
    :use-single-thread false
    :problem-specific-report imgfn-report
-   ;:total-error-method :rmse ;; should just affect what gets reported & sent to screen
    ;:meta-error-categories [error-deviation]
    :genetic-operator-probabilities {:reproduction 0.0
                                     :alternation 0.2
@@ -341,13 +338,6 @@
 ;; @@
 ;; =>
 ;;; {"type":"html","content":"<span class='clj-var'>#&#x27;imgfn.core/-main</span>","value":"#'imgfn.core/-main"}
-;; <=
-
-;; @@
-(transpose [0 1 2 3 4 5] 3)
-;; @@
-;; =>
-;;; {"type":"list-like","open":"<span class='clj-vector'>[</span>","close":"<span class='clj-vector'>]</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"},{"type":"html","content":"<span class='clj-long'>3</span>","value":"3"},{"type":"html","content":"<span class='clj-long'>1</span>","value":"1"},{"type":"html","content":"<span class='clj-long'>4</span>","value":"4"},{"type":"html","content":"<span class='clj-long'>2</span>","value":"2"},{"type":"html","content":"<span class='clj-long'>5</span>","value":"5"}],"value":"[0 3 1 4 2 5]"}
 ;; <=
 
 ;; @@
