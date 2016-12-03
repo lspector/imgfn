@@ -188,7 +188,7 @@
         buff (scale-buffer (to-java-image-buffer (floatimage->byteimage result-image))
                            64)]
     (update-frame imgfn-frame buff)
-    (spit-image buff (str "pics/" generation))
+    (spit-image buff (str "pics/" generation ".png"))
     nil ;; I think this means that the normal best will be reported (total error by default)
     ))
 

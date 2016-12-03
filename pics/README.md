@@ -1,0 +1,1 @@
+This file exists only to allow git to archive the pics/ directory, which will hold images produced by the project but is otherwise empty in the repository.

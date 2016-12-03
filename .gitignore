@@ -1,3 +1,7 @@
 out
-pics/*
+pics/*.png
+target/*
+.DS_Store
+.gorilla-port
+.nrepl-port
 *~
