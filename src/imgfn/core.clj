@@ -288,7 +288,7 @@
 
 (def argmap
   {:error-function imgfn-errors
-   :population-size 100
+   :population-size 1000
    :max-points 1000
    :max-genome-size-in-initial-program 100
    :evalpush-limit 	500
