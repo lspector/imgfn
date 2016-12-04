@@ -150,6 +150,7 @@
        (shrink)
        (shrink)
        (shrink)
+       (shrink)
        (byteimage->floatimage)))
 
 (def flattened-distilled-image (flatten distilled-image))
@@ -186,7 +187,7 @@
                                       (mod (Math/abs (:g result)) 1.0)
                                       (mod (Math/abs (:b result)) 1.0)])))))
         buff (scale-buffer (to-java-image-buffer (floatimage->byteimage result-image))
-                           64)]
+                           128)]
     (update-frame imgfn-frame buff)
     (spit-image buff (str "pics/" generation ".png"))
     nil ;; I think this means that the normal best will be reported (total error by default)
@@ -229,7 +230,9 @@
         target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
         result-distinctivenesses (mapv fdiff results (repeat (mean results)))
         distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)]
-    (vec (concat value-errors (mapv * value-errors distinctiveness-errors)))))
+    (mapv (fn [ve de] (+ ve (* ve de)))
+          value-errors 
+          distinctiveness-errors)))
 
 (when-not (contains? @instruction-table 'r)
   (define-registered
@@ -337,6 +340,9 @@
 
 (defn -main
   [& args]
+  (let [buff (scale-buffer (to-java-image-buffer (floatimage->byteimage distilled-image))
+                           64)]
+    (spit-image buff "target-image.png"))
   (pushgp argmap)
   (destroy-frame imgfn-frame))
 ;; @@
