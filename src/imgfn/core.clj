@@ -229,7 +229,7 @@
         target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
         result-distinctivenesses (mapv fdiff results (repeat (mean results)))
         distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)]
-    (vec (concat value-errors distinctiveness-errors))))
+    (vec (concat value-errors (mapv * value-errors distinctiveness-errors)))))
 
 (when-not (contains? @instruction-table 'r)
   (define-registered
