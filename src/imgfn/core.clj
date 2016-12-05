@@ -5,7 +5,9 @@
 
 ;; Programmatic image compression with genetic programming.
 
-;; This is experimental code, still under development!
+;; This is experimental code, still under development! The current version
+;; might reflect all sorts of temporary experiments, and all of the comments 
+;; might be wrong. Don't count on anything!
 
 ;; Problem: Given an image, find a concise function that takes x, y coordinates
 ;; (scaled 0-1) and returns values of red, green, and blue (scaled 0-1) for the 
@@ -16,7 +18,7 @@
 
 ;; Display and save "best" (by some measure) images during evolution.
 
-;; Initially, use only super-low-rez versions images (maybe 16x16 or so).
+;; Initially, use only super-low-rez versions images (maybe 16x16 or even 4x4).
 
 ;; Possibly display/save at a higher resolution than is used for error testing.
 
@@ -26,7 +28,7 @@
 ;; Possibly use a size-based meta-error to bias selection in favor of smaller 
 ;; programs.
 
-;; Use (always?) "call-controllable soft assignment" instructions for red,
+;; Possibly use "call-controllable soft assignment" instructions for red,
 ;; green, and blue outputs (see paper on soft assignment by McPhee, Langdon, ...?)
 ;; (Call-controllability, via a second argument, may be new with this work (?).)
 
@@ -234,56 +236,98 @@
           value-errors 
           distinctiveness-errors)))
 
+;; call-controllable soft assignment
+
+;(when-not (contains? @instruction-table 'r)
+;  (define-registered
+;    r
+;    ^{:stack-types [:float]}
+;    (fn [state]
+;      (if (empty? (rest (rest (:float state))))
+;        state
+;        (push-item (assoc (first (:auxiliary state))
+;                     :r
+;                     (let [new-value (mod (Math/abs (first (:float state))) 1.0)
+;                           old-value (:r (first (:auxiliary state)))
+;                           intensity (mod (Math/abs (second (:float state))) 1.0)]
+;                       (+ (* new-value intensity)
+;                          (* old-value (- 1.0 intensity)))))
+;                   :auxiliary
+;                   (pop-item :float (pop-item :float (pop-item :auxiliary state))))))))
+
+;(when-not (contains? @instruction-table 'g)
+;  (define-registered
+;    g
+;    ^{:stack-types [:float]}
+;    (fn [state]
+;      (if (empty? (rest (rest (:float state))))
+;        state
+;        (push-item (assoc (first (:auxiliary state))
+;                     :g
+;                     (let [new-value (mod (Math/abs (first (:float state))) 1.0)
+;                           old-value (:g (first (:auxiliary state)))
+;                           intensity (mod (Math/abs (second (:float state))) 1.0)]
+;                       (+ (* new-value intensity)
+;                          (* old-value (- 1.0 intensity)))))
+;                   :auxiliary
+;                   (pop-item :float (pop-item :float (pop-item :auxiliary state))))))))
+
+;(when-not (contains? @instruction-table 'b)
+;  (define-registered
+;    b
+;    ^{:stack-types [:float]}
+;    (fn [state]
+;      (if (empty? (rest (rest (:float state))))
+;        state
+;        (push-item (assoc (first (:auxiliary state))
+;                     :b
+;                     (let [new-value (mod (Math/abs (first (:float state))) 1.0)
+;                           old-value (:b (first (:auxiliary state)))
+;                           intensity (mod (Math/abs (second (:float state))) 1.0)]
+;                       (+ (* new-value intensity)
+;                          (* old-value (- 1.0 intensity)))))
+;                   :auxiliary
+;                   (pop-item :float (pop-item :float (pop-item :auxiliary state))))))))
+
+;; hard assignment
 (when-not (contains? @instruction-table 'r)
   (define-registered
     r
     ^{:stack-types [:float]}
     (fn [state]
-      (if (empty? (rest (rest (:float state))))
+      (if (empty? (rest (:float state)))
         state
         (push-item (assoc (first (:auxiliary state))
                      :r
-                     (let [new-value (mod (Math/abs (first (:float state))) 1.0)
-                           old-value (:r (first (:auxiliary state)))
-                           intensity (mod (Math/abs (second (:float state))) 1.0)]
-                       (+ (* new-value intensity)
-                          (* old-value (- 1.0 intensity)))))
+                     (mod (Math/abs (first (:float state))) 1.0))
                    :auxiliary
-                   (pop-item :float (pop-item :float (pop-item :auxiliary state))))))))
+                   (pop-item :float (pop-item :auxiliary state)))))))
 
 (when-not (contains? @instruction-table 'g)
   (define-registered
     g
     ^{:stack-types [:float]}
     (fn [state]
-      (if (empty? (rest (rest (:float state))))
+      (if (empty? (rest (:float state)))
         state
         (push-item (assoc (first (:auxiliary state))
                      :g
-                     (let [new-value (mod (Math/abs (first (:float state))) 1.0)
-                           old-value (:g (first (:auxiliary state)))
-                           intensity (mod (Math/abs (second (:float state))) 1.0)]
-                       (+ (* new-value intensity)
-                          (* old-value (- 1.0 intensity)))))
+                     (mod (Math/abs (first (:float state))) 1.0))
                    :auxiliary
-                   (pop-item :float (pop-item :float (pop-item :auxiliary state))))))))
+                   (pop-item :float (pop-item :auxiliary state)))))))
 
 (when-not (contains? @instruction-table 'b)
   (define-registered
     b
     ^{:stack-types [:float]}
     (fn [state]
-      (if (empty? (rest (rest (:float state))))
+      (if (empty? (rest (:float state)))
         state
         (push-item (assoc (first (:auxiliary state))
                      :b
-                     (let [new-value (mod (Math/abs (first (:float state))) 1.0)
-                           old-value (:b (first (:auxiliary state)))
-                           intensity (mod (Math/abs (second (:float state))) 1.0)]
-                       (+ (* new-value intensity)
-                          (* old-value (- 1.0 intensity)))))
+                     (mod (Math/abs (first (:float state))) 1.0))
                    :auxiliary
-                   (pop-item :float (pop-item :float (pop-item :auxiliary state))))))))
+                   (pop-item :float (pop-item :auxiliary state)))))))
 
 (defn error-deviation
   [i argmap]
