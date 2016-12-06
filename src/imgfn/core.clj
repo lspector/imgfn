@@ -232,13 +232,13 @@
                       [(:r result) (:g result) (:b result)])))
         value-errors (mapv fdiff targets results)
         ;target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
-        target-distinctivenesses (mapv fdiff targets (rotv targets))
+        ;target-distinctivenesses (mapv fdiff targets (rotv targets))
         ;result-distinctivenesses (mapv fdiff results (repeat (mean results)))
-        result-distinctivenesses (mapv fdiff results (rotv results))
-        distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)
+        ;result-distinctivenesses (mapv fdiff results (rotv results))
+        ;distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)
         ]
-    ;value-errors
-    (mapv (fn [ve de] (+ ve (* ve de)))
+    value-errors
+    #_(mapv (fn [ve de] (+ ve (* ve de)))
           value-errors 
           distinctiveness-errors)
     ))
@@ -363,8 +363,8 @@
    :problem-specific-report imgfn-report
    ;:meta-error-categories [error-deviation]
    :genetic-operator-probabilities {:reproduction 0.0
-                                    :alternation 0.2
-                                    :uniform-mutation 0.2
+                                    :alternation 0.25
+                                    :uniform-mutation 0.25
                                     :uniform-instruction-mutation 0.0
                                     :uniform-integer-mutation 0.0
                                     :uniform-float-mutation 0.0
@@ -373,19 +373,32 @@
                                     :uniform-boolean-mutation 0.0
                                     ; Similar to the old ULTRA operator:
                                     [:alternation :uniform-mutation] 0.0
-                                    :uniform-close-mutation 0.2
-                                    :uniform-silence-mutation 0.2
-                                    :uniform-crossover 0.2
+                                    :uniform-close-mutation 0.1
+                                    :uniform-silence-mutation 0.1
+                                    :uniform-crossover 0.1
                                     :two-point-crossover 0.0
                                     ; A hill-climbing version of uniform-silence-mutation:
                                     [:make-next-operator-revertable :uniform-silence-mutation] 0.0
                                     :autoconstruction 0.0
-                                    :uniform-deletion 0.0
-                                    :uniform-addition 0.0
+                                    :uniform-deletion 0.1
+                                    :uniform-addition 0.1
                                     ;; CUSTOM
                                     ;[:alternation :uniform-mutation :uniform-close-mutation :uniform-silence-mutation] 0.45
                                     ;[:uniform-mutation :uniform-close-mutation :uniform-silence-mutation] 0.45
                                     }
+   :alternation-rate 0.01
+   :alignment-deviation 10
+   :uniform-mutation-rate 0.01
+   :uniform-mutation-constant-tweak-rate 0.5
+   :uniform-mutation-float-gaussian-standard-deviation 0.1 ;1.0
+   :uniform-mutation-int-gaussian-standard-deviation 1
+   :uniform-mutation-string-char-change-rate 0.1
+   :uniform-mutation-tag-gaussian-standard-deviation 100
+   :uniform-close-mutation-rate 0.1
+   :close-increment-rate 0.5 ;0.2
+   :uniform-deletion-rate 0.01
+   :uniform-addition-rate 0.01
+   :uniform-silence-mutation-rate 0.1
    })
 
 
