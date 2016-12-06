@@ -217,6 +217,8 @@
                 (sq (- g1 g2))
                 (sq (- b1 b2)))))
 
+(defn rotv [v] (vec (concat (rest v) [(first v)])))
+
 ;; INCLUDE both value error and distinctiveness error for each xy pair
 
 (defn imgfn-errors
@@ -229,12 +231,17 @@
                     (let [result (program-result program x y)]
                       [(:r result) (:g result) (:b result)])))
         value-errors (mapv fdiff targets results)
-        target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
-        result-distinctivenesses (mapv fdiff results (repeat (mean results)))
-        distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)]
+        ;target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
+        target-distinctivenesses (mapv fdiff targets (rotv targets))
+        ;result-distinctivenesses (mapv fdiff results (repeat (mean results)))
+        result-distinctivenesses (mapv fdiff results (rotv results))
+        distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)
+        ]
+    ;value-errors
     (mapv (fn [ve de] (+ ve (* ve de)))
           value-errors 
-          distinctiveness-errors)))
+          distinctiveness-errors)
+    ))
 
 ;; call-controllable soft assignment
 
@@ -336,11 +343,11 @@
 (def argmap
   {:error-function imgfn-errors
    :population-size 1000
+   :max-generations 1000
    :max-points 1000
    :max-genome-size-in-initial-program 100
    :evalpush-limit 	500
-   :alternation-rate 0.01
-   :atom-generators (let [instructions (registered-for-stacks [:integer :float :boolean :exec])]
+   :atom-generators (let [instructions (registered-for-stacks [:integer :boolean :exec :float])]
                       (vec (apply concat (mapv #(vector %1 %2)
                                                instructions
                                                (cycle [(fn [] (- 100 (lrand-int 201)))
