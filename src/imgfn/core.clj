@@ -343,10 +343,10 @@
 (def argmap
   {:error-function imgfn-errors
    :population-size 1000
-   :max-generations 1000
+   :max-generations 10000
    :max-points 1000
    :max-genome-size-in-initial-program 100
-   :evalpush-limit 	500
+   :evalpush-limit 	1000
    :atom-generators (let [instructions (registered-for-stacks [:integer :boolean :exec :float])]
                       (vec (apply concat (mapv #(vector %1 %2)
                                                instructions
@@ -363,8 +363,8 @@
    :problem-specific-report imgfn-report
    ;:meta-error-categories [error-deviation]
    :genetic-operator-probabilities {:reproduction 0.0
-                                    :alternation 0.25
-                                    :uniform-mutation 0.25
+                                    :alternation 0.0
+                                    :uniform-mutation 0.0
                                     :uniform-instruction-mutation 0.0
                                     :uniform-integer-mutation 0.0
                                     :uniform-float-mutation 0.0
@@ -372,7 +372,7 @@
                                     :uniform-string-mutation 0.0
                                     :uniform-boolean-mutation 0.0
                                     ; Similar to the old ULTRA operator:
-                                    [:alternation :uniform-mutation] 0.0
+                                    [:alternation :uniform-mutation] 0.5
                                     :uniform-close-mutation 0.1
                                     :uniform-silence-mutation 0.1
                                     :uniform-crossover 0.1
@@ -390,7 +390,7 @@
    :alignment-deviation 10
    :uniform-mutation-rate 0.01
    :uniform-mutation-constant-tweak-rate 0.5
-   :uniform-mutation-float-gaussian-standard-deviation 0.1 ;1.0
+   :uniform-mutation-float-gaussian-standard-deviation 0.01 ;1.0
    :uniform-mutation-int-gaussian-standard-deviation 1
    :uniform-mutation-string-char-change-rate 0.1
    :uniform-mutation-tag-gaussian-standard-deviation 100
