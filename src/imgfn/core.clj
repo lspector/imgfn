@@ -34,6 +34,7 @@
 
 (ns imgfn.core
   (:use clojush.ns clojure.math.numeric-tower)
+  (:require [clojure.math.combinatorics :as combo])
   (import [java.awt Color image.BufferedImage]
           [javax.imageio.ImageIO]
           [javax.swing JFrame ImageIcon JLabel])
@@ -236,6 +237,13 @@
 
 (defn rotv [v] (vec (concat (rest v) [(first v)])))
 
+(defn blind-combinations
+  [s]
+  (let [index-pairs (combo/combinations (range (count s)) 2)]
+    (map (fn [[i1 i2]]
+           (vector (nth s i1) (nth s i2)))
+         index-pairs)))
+
 ;; INCLUDE both value error and distinctiveness error for each xy pair
 
 (defn imgfn-errors
@@ -253,13 +261,18 @@
         ;result-distinctivenesses (mapv fdiff results (repeat (mean results)))
         ;result-distinctivenesses (mapv fdiff results (rotv results))
         ;distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)
-        target-result-correlation (correlation targets results)
+        ;target-result-correlation (correlation targets results)
         ]
     ;value-errors
     #_(mapv (fn [ve de] (+ ve (* ve de)))
           value-errors 
           distinctiveness-errors)
-    (vec (concat value-errors [(/ (- 1 target-result-correlation) 2)]))
+    ;(vec (concat value-errors [(/ (- 1 target-result-correlation) 2)]))
+    (vec (concat value-errors
+                 (for [[[r1 t1][r2 t2]] (blind-combinations (map vector results targets))]
+                   (if (if (= t1 t2) (= r1 r2) (not= r1 r2))
+                     0.0
+                     1.0))))
     ))
 
 ;; call-controllable soft assignment
