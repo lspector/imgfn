@@ -203,6 +203,23 @@
                                  nums))
                   (dec (count nums))))))
 
+(defn covariance [s1 s2] ;; assumes s1 and s2 same length
+  (let [s1-mean (mean s1)
+        s2-mean (mean s2)]
+    (float (/ (reduce + (map * 
+                             (map - s1 (repeat s1-mean))
+                             (map - s2 (repeat s2-mean))))
+              (dec (count s1))))))
+
+; http://ci.columbia.edu/ci/premba_test/c0331/s7/s7_5.html
+
+(defn correlation [s1 s2]
+  (let [numerator (covariance s1 s2)]
+    (if (zero? numerator)
+      0.0
+      (/ numerator
+         (* (stdev s1) (stdev s2))))))
+
 (defn third [coll] (nth coll 2))
 
 (defn transpose
@@ -236,11 +253,13 @@
         ;result-distinctivenesses (mapv fdiff results (repeat (mean results)))
         ;result-distinctivenesses (mapv fdiff results (rotv results))
         ;distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)
+        target-result-correlation (correlation targets results)
         ]
-    value-errors
+    ;value-errors
     #_(mapv (fn [ve de] (+ ve (* ve de)))
           value-errors 
           distinctiveness-errors)
+    (vec (concat value-errors [(/ (- 1 target-result-correlation) 2)]))
     ))
 
 ;; call-controllable soft assignment
