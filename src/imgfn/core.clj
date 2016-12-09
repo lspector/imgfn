@@ -251,10 +251,11 @@
   (let [x-range (range (count distilled-image))
         y-range (range (count (first distilled-image)))
         targets flattened-distilled-image
-        results (flatten
-                  (for [y y-range x x-range] ;; this ordering will match the flattened targets
-                    (let [result (program-result program x y)]
-                      [(:r result) (:g result) (:b result)])))
+        results (mapv #(mod % 1.0)
+                      (flatten
+                        (for [y y-range x x-range] ;; this ordering will match the flattened targets
+                          (let [result (program-result program x y)]
+                            [(:r result) (:g result) (:b result)]))))
         value-errors (mapv fdiff targets results)
         ;target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
         ;target-distinctivenesses (mapv fdiff targets (rotv targets))
@@ -262,17 +263,30 @@
         ;result-distinctivenesses (mapv fdiff results (rotv results))
         ;distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)
         ;target-result-correlation (correlation targets results)
+        ;distinctiveness-errors (mapv * target-distinctivenesses result-distinctivenesses)
+        ;target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
+        ;result-distinctivenesses (mapv fdiff results (repeat (mean results)))
+        ;distinctiveness-errors (mapv - target-distinctivenesses result-distinctivenesses)
+        target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
+        result-distinctivenesses (mapv fdiff results (repeat (mean results)))
+        distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)
         ]
     ;value-errors
     #_(mapv (fn [ve de] (+ ve (* ve de)))
           value-errors 
           distinctiveness-errors)
     ;(vec (concat value-errors [(/ (- 1 target-result-correlation) 2)]))
-    (vec (concat value-errors
-                 (for [[[r1 t1][r2 t2]] (blind-combinations (map vector results targets))]
-                   (if (if (= t1 t2) (= r1 r2) (not= r1 r2))
-                     0.0
-                     1.0))))
+    ;(vec (concat value-errors
+    ;             (for [[[r1 t1][r2 t2]] (blind-combinations (map vector results targets))]
+    ;               (if (if (= t1 t2) (= r1 r2) (not= r1 r2))
+    ;                 0.0
+    ;                 1.0))))
+    ;(vec (concat value-errors
+    ;             [(mean (for [[[r1 t1][r2 t2]] (blind-combinations (map vector results targets))]
+    ;                      (if (if (= t1 t2) (= r1 r2) (not= r1 r2))
+    ;                        0.0
+    ;                        1.0)))]))
+    (vec (concat value-errors distinctiveness-errors))
     ))
 
 ;; call-controllable soft assignment
@@ -444,6 +458,41 @@
 ;; @@
 ;; =>
 ;;; {"type":"html","content":"<span class='clj-var'>#&#x27;imgfn.core/-main</span>","value":"#'imgfn.core/-main"}
+;; <=
+
+;; @@
+flattened-distilled-image
+;; @@
+;; =>
+;;; {"type":"list-like","open":"<span class='clj-lazy-seq'>(</span>","close":"<span class='clj-lazy-seq'>)</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-double'>0.4588235294117647</span>","value":"0.4588235294117647"},{"type":"html","content":"<span class='clj-double'>0.1607843137254902</span>","value":"0.1607843137254902"},{"type":"html","content":"<span class='clj-double'>0.2</span>","value":"0.2"},{"type":"html","content":"<span class='clj-double'>0.4470588235294118</span>","value":"0.4470588235294118"},{"type":"html","content":"<span class='clj-double'>0.15294117647058825</span>","value":"0.15294117647058825"},{"type":"html","content":"<span class='clj-double'>0.17254901960784313</span>","value":"0.17254901960784313"},{"type":"html","content":"<span class='clj-double'>0.49019607843137253</span>","value":"0.49019607843137253"},{"type":"html","content":"<span class='clj-double'>0.25098039215686274</span>","value":"0.25098039215686274"},{"type":"html","content":"<span class='clj-double'>0.2784313725490196</span>","value":"0.2784313725490196"},{"type":"html","content":"<span class='clj-double'>0.23137254901960785</span>","value":"0.23137254901960785"},{"type":"html","content":"<span class='clj-double'>0.0784313725490196</span>","value":"0.0784313725490196"},{"type":"html","content":"<span class='clj-double'>0.09019607843137255</span>","value":"0.09019607843137255"},{"type":"html","content":"<span class='clj-double'>0.5098039215686274</span>","value":"0.5098039215686274"},{"type":"html","content":"<span class='clj-double'>0.24705882352941178</span>","value":"0.24705882352941178"},{"type":"html","content":"<span class='clj-double'>0.27450980392156865</span>","value":"0.27450980392156865"},{"type":"html","content":"<span class='clj-double'>0.40784313725490196</span>","value":"0.40784313725490196"},{"type":"html","content":"<span class='clj-double'>0.10588235294117647</span>","value":"0.10588235294117647"},{"type":"html","content":"<span class='clj-double'>0.12941176470588237</span>","value":"0.12941176470588237"},{"type":"html","content":"<span class='clj-double'>0.9411764705882353</span>","value":"0.9411764705882353"},{"type":"html","content":"<span class='clj-double'>0.7764705882352941</span>","value":"0.7764705882352941"},{"type":"html","content":"<span class='clj-double'>0.7803921568627451</span>","value":"0.7803921568627451"},{"type":"html","content":"<span class='clj-double'>0.1843137254901961</span>","value":"0.1843137254901961"},{"type":"html","content":"<span class='clj-double'>0.11764705882352941</span>","value":"0.11764705882352941"},{"type":"html","content":"<span class='clj-double'>0.0784313725490196</span>","value":"0.0784313725490196"},{"type":"html","content":"<span class='clj-double'>0.17647058823529413</span>","value":"0.17647058823529413"},{"type":"html","content":"<span class='clj-double'>0.047058823529411764</span>","value":"0.047058823529411764"},{"type":"html","content":"<span class='clj-double'>0.07450980392156863</span>","value":"0.07450980392156863"},{"type":"html","content":"<span class='clj-double'>0.42745098039215684</span>","value":"0.42745098039215684"},{"type":"html","content":"<span class='clj-double'>0.1607843137254902</span>","value":"0.1607843137254902"},{"type":"html","content":"<span class='clj-double'>0.1568627450980392</span>","value":"0.1568627450980392"},{"type":"html","content":"<span class='clj-double'>0.9333333333333333</span>","value":"0.9333333333333333"},{"type":"html","content":"<span class='clj-double'>0.8705882352941177</span>","value":"0.8705882352941177"},{"type":"html","content":"<span class='clj-double'>0.7803921568627451</span>","value":"0.7803921568627451"},{"type":"html","content":"<span class='clj-double'>0.3176470588235294</span>","value":"0.3176470588235294"},{"type":"html","content":"<span class='clj-double'>0.21568627450980393</span>","value":"0.21568627450980393"},{"type":"html","content":"<span class='clj-double'>0.11764705882352941</span>","value":"0.11764705882352941"},{"type":"html","content":"<span class='clj-double'>0.06666666666666667</span>","value":"0.06666666666666667"},{"type":"html","content":"<span class='clj-double'>0.023529411764705882</span>","value":"0.023529411764705882"},{"type":"html","content":"<span class='clj-double'>0.0392156862745098</span>","value":"0.0392156862745098"},{"type":"html","content":"<span class='clj-double'>0.5725490196078431</span>","value":"0.5725490196078431"},{"type":"html","content":"<span class='clj-double'>0.4196078431372549</span>","value":"0.4196078431372549"},{"type":"html","content":"<span class='clj-double'>0.35294117647058826</span>","value":"0.35294117647058826"},{"type":"html","content":"<span class='clj-double'>0.3764705882352941</span>","value":"0.3764705882352941"},{"type":"html","content":"<span class='clj-double'>0.43137254901960786</span>","value":"0.43137254901960786"},{"type":"html","content":"<span class='clj-double'>0.6078431372549019</span>","value":"0.6078431372549019"},{"type":"html","content":"<span class='clj-double'>0.8549019607843137</span>","value":"0.8549019607843137"},{"type":"html","content":"<span class='clj-double'>0.7529411764705882</span>","value":"0.7529411764705882"},{"type":"html","content":"<span class='clj-double'>0.615686274509804</span>","value":"0.615686274509804"}],"value":"(0.4588235294117647 0.1607843137254902 0.2 0.4470588235294118 0.15294117647058825 0.17254901960784313 0.49019607843137253 0.25098039215686274 0.2784313725490196 0.23137254901960785 0.0784313725490196 0.09019607843137255 0.5098039215686274 0.24705882352941178 0.27450980392156865 0.40784313725490196 0.10588235294117647 0.12941176470588237 0.9411764705882353 0.7764705882352941 0.7803921568627451 0.1843137254901961 0.11764705882352941 0.0784313725490196 0.17647058823529413 0.047058823529411764 0.07450980392156863 0.42745098039215684 0.1607843137254902 0.1568627450980392 0.9333333333333333 0.8705882352941177 0.7803921568627451 0.3176470588235294 0.21568627450980393 0.11764705882352941 0.06666666666666667 0.023529411764705882 0.0392156862745098 0.5725490196078431 0.4196078431372549 0.35294117647058826 0.3764705882352941 0.43137254901960786 0.6078431372549019 0.8549019607843137 0.7529411764705882 0.615686274509804)"}
+;; <=
+
+;; @@
+(apply distinct? flattened-distilled-image)
+;; @@
+;; =>
+;;; {"type":"html","content":"<span class='clj-unkown'>false</span>","value":"false"}
+;; <=
+
+;; @@
+(count flattened-distilled-image)
+;; @@
+;; =>
+;;; {"type":"html","content":"<span class='clj-unkown'>48</span>","value":"48"}
+;; <=
+
+;; @@
+(count (distinct flattened-distilled-image))
+;; @@
+;; =>
+;;; {"type":"html","content":"<span class='clj-unkown'>44</span>","value":"44"}
+;; <=
+
+;; @@
+(count (blind-combinations (range (* 16 3))))
+;; @@
+;; =>
+;;; {"type":"html","content":"<span class='clj-unkown'>1128</span>","value":"1128"}
 ;; <=
 
 ;; @@
