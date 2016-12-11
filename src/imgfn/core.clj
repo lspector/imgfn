@@ -33,8 +33,9 @@
 ;; (Call-controllability, via a second argument, may be new with this work (?).)
 
 (ns imgfn.core
-  (:use clojush.ns clojure.math.numeric-tower)
+  (:use clojush.ns clojure.math.numeric-tower clojush.experimental.decimation)
   (:require [clojure.math.combinatorics :as combo])
+  (:require [clj-random.core :as random])
   (import [java.awt Color image.BufferedImage]
           [javax.imageio.ImageIO]
           [javax.swing JFrame ImageIcon JLabel])
@@ -267,11 +268,11 @@
         ;target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
         ;result-distinctivenesses (mapv fdiff results (repeat (mean results)))
         ;distinctiveness-errors (mapv - target-distinctivenesses result-distinctivenesses)
-        target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
-        result-distinctivenesses (mapv fdiff results (repeat (mean results)))
-        distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)
+        ;target-distinctivenesses (mapv fdiff targets (repeat (mean targets)))
+        ;result-distinctivenesses (mapv fdiff results (repeat (mean results)))
+        ;distinctiveness-errors (mapv fdiff target-distinctivenesses result-distinctivenesses)
         ]
-    ;value-errors
+    value-errors
     #_(mapv (fn [ve de] (+ ve (* ve de)))
           value-errors 
           distinctiveness-errors)
@@ -286,7 +287,7 @@
     ;                      (if (if (= t1 t2) (= r1 r2) (not= r1 r2))
     ;                        0.0
     ;                        1.0)))]))
-    (vec (concat value-errors distinctiveness-errors))
+    ;(vec (concat value-errors distinctiveness-errors))
     ))
 
 ;; call-controllable soft assignment
@@ -447,12 +448,166 @@
    :uniform-silence-mutation-rate 0.1
    })
 
+;; whatevs operator: make a small, probably insignificant change
+
+;; can use standard operators, overriding args if we want
+
+;; Q: should params be set to make have n% (50?) chance of changing 
+;; genome of median size in pop???
+
+(defn whatevs
+  "Returns the individual."
+  [ind {;; we will ignore/override genetic op params, and add :dad in the caller
+         :keys [dad] 
+         :as argmap}]
+  ((lrand-nth [uniform-instruction-mutation
+              uniform-integer-mutation
+              uniform-float-mutation
+              ;uniform-tag-mutation
+              ;uniform-string-mutation
+              uniform-boolean-mutation
+              uniform-close-mutation
+              uniform-silence-mutation
+              uniform-deletion
+              uniform-addition
+              (partial alternation dad)
+              (partial uniform-crossover dad)])
+   ind
+   argmap))
+
+;; http://ieeexplore.ieee.org/abstract/document/4983114/?section=abstract
+;;https://cs.adelaide.edu.au/~frank/papers/cec09.pdf
+;;http://link.springer.com/chapter/10.1007%2F978-3-540-87700-4_12#page-1
+
+(defn ramp-breed
+  "Returns an individual bred from the given population using the given parameters."
+  [agt ;necessary since breed is called using swap! or send, even though not used
+   mom
+   variation-steps
+   location rand-gen population
+   {:keys [genetic-operator-probabilities] :as argmap}]
+  (random/with-rng 
+    rand-gen
+    (loop [steps variation-steps
+           child mom]
+      (if (< steps 1)
+        child
+        (recur (dec steps)
+               (whatevs child argmap))))))
+
+(defn remove-one
+  "Returns sequence s without the first instance of item."
+  [item s]
+  (let [[without-item with-item] (split-with #(not (= item %)) s)]
+    (concat without-item (rest with-item))))
+
+(defn selection-sort ;; ignores locations!
+  [population argmap]
+  (loop [remaining population
+         sorted []]
+    (if (empty? remaining)
+      sorted
+      (let [selected (select remaining 0 argmap)] ;; that 0 is a location argument
+        (recur (remove-one selected remaining)
+               (conj sorted selected))))))
+
+(defn ramp-produce-new-offspring
+  [pop-agents child-agents rand-gens
+   {:keys [decimation-ratio population-size decimation-tournament-size
+           trivial-geography-radius use-single-thread ]
+    :as argmap}]
+  (let [pop (if (>= decimation-ratio 1)
+              (vec (doall (map deref pop-agents)))
+              (decimate (vec (doall (map deref pop-agents)))
+                        (int (* decimation-ratio population-size))
+                        decimation-tournament-size
+                        trivial-geography-radius))
+        ordered-pop (selection-sort pop argmap)
+        mean-genome-length (mean (map count (map :genome ordered-pop)))]
+    (dotimes [i population-size]
+      ((if use-single-thread swap! send)
+       (nth child-agents i)
+       ramp-breed
+       (nth ordered-pop i)
+       (inc i) i (nth rand-gens i) pop 
+       (assoc argmap 
+         :dad (lrand-nth pop)
+         ;:alternation-rate (/ 1.0 mean-genome-length)
+         ;:alignment-deviation 10
+         ;:uniform-mutation-rate (/ 1.0 mean-genome-length)
+         ;:uniform-mutation-constant-tweak-rate 0.5
+         ;:uniform-mutation-float-gaussian-standard-deviation 1.0
+         ;:uniform-mutation-int-gaussian-standard-deviation 1
+         ;:uniform-mutation-string-char-change-rate 0.1
+         ;:uniform-mutation-tag-gaussian-standard-deviation 100
+         ;:uniform-close-mutation-rate (/ 1.0 mean-genome-length)
+         ;:close-increment-rate 0.2
+         ;:uniform-deletion-rate (/ 1.0 mean-genome-length)
+         ;:uniform-addition-rate (/ 1.0 mean-genome-length)
+         ;:uniform-silence-mutation-rate (/ 1.0 mean-genome-length)
+         )))
+    (when-not use-single-thread (apply await child-agents)))) ;; SYNCHRONIZE
+
+(defn ramp-pushgp ;; this is a cut/paste of pushgp but using ramp-produce-new-offspring, marked ;*** 
+  "The top-level routine of pushgp."
+  ([] (pushgp '()))
+  ([args]
+    (reset! timer-atom (System/currentTimeMillis))
+    (load-push-argmap args)
+    (random/with-rng (random/make-mersennetwister-rng (:random-seed @push-argmap))
+      ;; set globals from parameters
+      (reset-globals)
+      (initial-report @push-argmap) ;; Print the inital report
+      (print-params @push-argmap)
+      (check-genetic-operator-probabilities-add-to-one @push-argmap)
+      (timer @push-argmap :initialization)
+      (println "\n;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;")
+      (println "\nGenerating initial population...") (flush)
+      (let [pop-agents (make-pop-agents @push-argmap)
+            child-agents (make-child-agents @push-argmap)
+            {:keys [rand-gens random-seeds]} (make-rng @push-argmap)]
+        ;(print "Random seeds: ")
+        ;(doseq [seed random-seeds] (print " " seed))
+        ;(println)
+        ;; Main loop
+        (loop [generation 0]
+          (println "Processing generation:" generation) (flush)
+          (population-translate-plush-to-push pop-agents @push-argmap)
+          (timer @push-argmap :reproduction)
+          (print "Computing errors... ") (flush)
+          (compute-errors pop-agents rand-gens @push-argmap)
+          (println "Done computing errors.") (flush)
+          (timer @push-argmap :fitness)
+          ;; calculate solution rates if necessary for historically-assessed hardness
+          (calculate-hah-solution-rates pop-agents @push-argmap)
+          ;; create global structure to support elite group lexicase selection
+          (when (= (:parent-selection @push-argmap) :elitegroup-lexicase)
+            (build-elitegroups pop-agents))
+          ;; calculate implicit fitness sharing fitness for population
+          (when (= (:total-error-method @push-argmap) :ifs)
+            (calculate-implicit-fitness-sharing pop-agents @push-argmap))
+          (timer @push-argmap :other)
+          ;; report and check for success
+          (let [[outcome best] (report-and-check-for-success (vec (doall (map deref pop-agents)))
+                                                             generation @push-argmap)]
+            (cond (= outcome :failure) (do (printf "\nFAILURE\n")
+                                         (if (:return-simplified-on-failure @push-argmap)
+                                           (auto-simplify best (:error-function @push-argmap) (:final-report-simplifications @push-argmap) true 500)
+                                           (flush)))
+                  (= outcome :continue) (do (timer @push-argmap :report)
+                                          (println "\nProducing offspring...") (flush)
+                                          (ramp-produce-new-offspring pop-agents child-agents rand-gens @push-argmap)
+                                          (println "Installing next generation...") (flush)
+                                          (install-next-generation pop-agents child-agents @push-argmap)
+                                          (recur (inc generation)))
+                  :else  (final-report generation best @push-argmap))))))))
 
 (defn -main
   [& args]
   (let [buff (scale-buffer (to-java-image-buffer (floatimage->byteimage distilled-image))
                            64)]
     (spit-image buff "target-image.png"))
+  ;(ramp-pushgp argmap)
   (pushgp argmap)
   (destroy-frame imgfn-frame))
 ;; @@
@@ -461,38 +616,63 @@
 ;; <=
 
 ;; @@
-flattened-distilled-image
+(def foo (make-individual :genome (random-plush-genome 10 [0])))
+(def bar (make-individual :genome (random-plush-genome 10 [1])))
 ;; @@
 ;; =>
-;;; {"type":"list-like","open":"<span class='clj-lazy-seq'>(</span>","close":"<span class='clj-lazy-seq'>)</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-double'>0.4588235294117647</span>","value":"0.4588235294117647"},{"type":"html","content":"<span class='clj-double'>0.1607843137254902</span>","value":"0.1607843137254902"},{"type":"html","content":"<span class='clj-double'>0.2</span>","value":"0.2"},{"type":"html","content":"<span class='clj-double'>0.4470588235294118</span>","value":"0.4470588235294118"},{"type":"html","content":"<span class='clj-double'>0.15294117647058825</span>","value":"0.15294117647058825"},{"type":"html","content":"<span class='clj-double'>0.17254901960784313</span>","value":"0.17254901960784313"},{"type":"html","content":"<span class='clj-double'>0.49019607843137253</span>","value":"0.49019607843137253"},{"type":"html","content":"<span class='clj-double'>0.25098039215686274</span>","value":"0.25098039215686274"},{"type":"html","content":"<span class='clj-double'>0.2784313725490196</span>","value":"0.2784313725490196"},{"type":"html","content":"<span class='clj-double'>0.23137254901960785</span>","value":"0.23137254901960785"},{"type":"html","content":"<span class='clj-double'>0.0784313725490196</span>","value":"0.0784313725490196"},{"type":"html","content":"<span class='clj-double'>0.09019607843137255</span>","value":"0.09019607843137255"},{"type":"html","content":"<span class='clj-double'>0.5098039215686274</span>","value":"0.5098039215686274"},{"type":"html","content":"<span class='clj-double'>0.24705882352941178</span>","value":"0.24705882352941178"},{"type":"html","content":"<span class='clj-double'>0.27450980392156865</span>","value":"0.27450980392156865"},{"type":"html","content":"<span class='clj-double'>0.40784313725490196</span>","value":"0.40784313725490196"},{"type":"html","content":"<span class='clj-double'>0.10588235294117647</span>","value":"0.10588235294117647"},{"type":"html","content":"<span class='clj-double'>0.12941176470588237</span>","value":"0.12941176470588237"},{"type":"html","content":"<span class='clj-double'>0.9411764705882353</span>","value":"0.9411764705882353"},{"type":"html","content":"<span class='clj-double'>0.7764705882352941</span>","value":"0.7764705882352941"},{"type":"html","content":"<span class='clj-double'>0.7803921568627451</span>","value":"0.7803921568627451"},{"type":"html","content":"<span class='clj-double'>0.1843137254901961</span>","value":"0.1843137254901961"},{"type":"html","content":"<span class='clj-double'>0.11764705882352941</span>","value":"0.11764705882352941"},{"type":"html","content":"<span class='clj-double'>0.0784313725490196</span>","value":"0.0784313725490196"},{"type":"html","content":"<span class='clj-double'>0.17647058823529413</span>","value":"0.17647058823529413"},{"type":"html","content":"<span class='clj-double'>0.047058823529411764</span>","value":"0.047058823529411764"},{"type":"html","content":"<span class='clj-double'>0.07450980392156863</span>","value":"0.07450980392156863"},{"type":"html","content":"<span class='clj-double'>0.42745098039215684</span>","value":"0.42745098039215684"},{"type":"html","content":"<span class='clj-double'>0.1607843137254902</span>","value":"0.1607843137254902"},{"type":"html","content":"<span class='clj-double'>0.1568627450980392</span>","value":"0.1568627450980392"},{"type":"html","content":"<span class='clj-double'>0.9333333333333333</span>","value":"0.9333333333333333"},{"type":"html","content":"<span class='clj-double'>0.8705882352941177</span>","value":"0.8705882352941177"},{"type":"html","content":"<span class='clj-double'>0.7803921568627451</span>","value":"0.7803921568627451"},{"type":"html","content":"<span class='clj-double'>0.3176470588235294</span>","value":"0.3176470588235294"},{"type":"html","content":"<span class='clj-double'>0.21568627450980393</span>","value":"0.21568627450980393"},{"type":"html","content":"<span class='clj-double'>0.11764705882352941</span>","value":"0.11764705882352941"},{"type":"html","content":"<span class='clj-double'>0.06666666666666667</span>","value":"0.06666666666666667"},{"type":"html","content":"<span class='clj-double'>0.023529411764705882</span>","value":"0.023529411764705882"},{"type":"html","content":"<span class='clj-double'>0.0392156862745098</span>","value":"0.0392156862745098"},{"type":"html","content":"<span class='clj-double'>0.5725490196078431</span>","value":"0.5725490196078431"},{"type":"html","content":"<span class='clj-double'>0.4196078431372549</span>","value":"0.4196078431372549"},{"type":"html","content":"<span class='clj-double'>0.35294117647058826</span>","value":"0.35294117647058826"},{"type":"html","content":"<span class='clj-double'>0.3764705882352941</span>","value":"0.3764705882352941"},{"type":"html","content":"<span class='clj-double'>0.43137254901960786</span>","value":"0.43137254901960786"},{"type":"html","content":"<span class='clj-double'>0.6078431372549019</span>","value":"0.6078431372549019"},{"type":"html","content":"<span class='clj-double'>0.8549019607843137</span>","value":"0.8549019607843137"},{"type":"html","content":"<span class='clj-double'>0.7529411764705882</span>","value":"0.7529411764705882"},{"type":"html","content":"<span class='clj-double'>0.615686274509804</span>","value":"0.615686274509804"}],"value":"(0.4588235294117647 0.1607843137254902 0.2 0.4470588235294118 0.15294117647058825 0.17254901960784313 0.49019607843137253 0.25098039215686274 0.2784313725490196 0.23137254901960785 0.0784313725490196 0.09019607843137255 0.5098039215686274 0.24705882352941178 0.27450980392156865 0.40784313725490196 0.10588235294117647 0.12941176470588237 0.9411764705882353 0.7764705882352941 0.7803921568627451 0.1843137254901961 0.11764705882352941 0.0784313725490196 0.17647058823529413 0.047058823529411764 0.07450980392156863 0.42745098039215684 0.1607843137254902 0.1568627450980392 0.9333333333333333 0.8705882352941177 0.7803921568627451 0.3176470588235294 0.21568627450980393 0.11764705882352941 0.06666666666666667 0.023529411764705882 0.0392156862745098 0.5725490196078431 0.4196078431372549 0.35294117647058826 0.3764705882352941 0.43137254901960786 0.6078431372549019 0.8549019607843137 0.7529411764705882 0.615686274509804)"}
+;;; {"type":"html","content":"<span class='clj-var'>#&#x27;imgfn.core/bar</span>","value":"#'imgfn.core/bar"}
 ;; <=
 
 ;; @@
-(apply distinct? flattened-distilled-image)
+foo
 ;; @@
 ;; =>
-;;; {"type":"html","content":"<span class='clj-unkown'>false</span>","value":"false"}
+;;; {"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:genome</span>","value":":genome"},{"type":"list-like","open":"<span class='clj-vector'>[</span>","close":"<span class='clj-vector'>]</span>","separator":" ","items":[{"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:instruction</span>","value":":instruction"},{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"}],"value":"[:instruction 0]"}],"value":"{:instruction 0}"},{"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:instruction</span>","value":":instruction"},{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"}],"value":"[:instruction 0]"}],"value":"{:instruction 0}"},{"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:instruction</span>","value":":instruction"},{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"}],"value":"[:instruction 0]"}],"value":"{:instruction 0}"},{"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:instruction</span>","value":":instruction"},{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"}],"value":"[:instruction 0]"}],"value":"{:instruction 0}"},{"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:instruction</span>","value":":instruction"},{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"}],"value":"[:instruction 0]"}],"value":"{:instruction 0}"},{"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:instruction</span>","value":":instruction"},{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"}],"value":"[:instruction 0]"}],"value":"{:instruction 0}"},{"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:instruction</span>","value":":instruction"},{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"}],"value":"[:instruction 0]"}],"value":"{:instruction 0}"},{"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:instruction</span>","value":":instruction"},{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"}],"value":"[:instruction 0]"}],"value":"{:instruction 0}"},{"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:instruction</span>","value":":instruction"},{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"}],"value":"[:instruction 0]"}],"value":"{:instruction 0}"},{"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:instruction</span>","value":":instruction"},{"type":"html","content":"<span class='clj-long'>0</span>","value":"0"}],"value":"[:instruction 0]"}],"value":"{:instruction 0}"}],"value":"[{:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0}]"}],"value":"[:genome [{:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0}]]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:program</span>","value":":program"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:program nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:errors</span>","value":":errors"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:errors nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:total-error</span>","value":":total-error"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:total-error nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:normalized-error</span>","value":":normalized-error"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:normalized-error nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:weighted-error</span>","value":":weighted-error"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:weighted-error nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:meta-errors</span>","value":":meta-errors"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:meta-errors nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:history</span>","value":":history"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:history nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:ancestors</span>","value":":ancestors"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:ancestors nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:uuid</span>","value":":uuid"},{"type":"html","content":"<span class='clj-unkown'>#uuid &quot;2736f209-c76b-4b6e-a449-224b9e53e2ad&quot;</span>","value":"#uuid \"2736f209-c76b-4b6e-a449-224b9e53e2ad\""}],"value":"[:uuid #uuid \"2736f209-c76b-4b6e-a449-224b9e53e2ad\"]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:parent-uuids</span>","value":":parent-uuids"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:parent-uuids nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:genetic-operators</span>","value":":genetic-operators"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:genetic-operators nil]"}],"value":"#clojush.individual.individual{:genome [{:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0}], :program nil, :errors nil, :total-error nil, :normalized-error nil, :weighted-error nil, :meta-errors nil, :history nil, :ancestors nil, :uuid #uuid \"2736f209-c76b-4b6e-a449-224b9e53e2ad\", :parent-uuids nil, :genetic-operators nil}"}
 ;; <=
 
 ;; @@
-(count flattened-distilled-image)
+(whatevs foo (assoc @push-argmap :dad bar))
 ;; @@
+;; ->
+;;; #function[clojush.pushgp.genetic-operators/uniform-deletion]
+;;; 
+;; <-
 ;; =>
-;;; {"type":"html","content":"<span class='clj-unkown'>48</span>","value":"48"}
+;;; {"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:genome</span>","value":":genome"},{"type":"list-like","open":"<span class='clj-lazy-seq'>(</span>","close":"<span class='clj-lazy-seq'>)</span>","separator":" ","items":[],"value":"()"}],"value":"[:genome ()]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:program</span>","value":":program"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:program nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:errors</span>","value":":errors"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:errors nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:total-error</span>","value":":total-error"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:total-error nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:normalized-error</span>","value":":normalized-error"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:normalized-error nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:weighted-error</span>","value":":weighted-error"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:weighted-error nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:meta-errors</span>","value":":meta-errors"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:meta-errors nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:history</span>","value":":history"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:history nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:ancestors</span>","value":":ancestors"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:ancestors nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:uuid</span>","value":":uuid"},{"type":"html","content":"<span class='clj-unkown'>#uuid &quot;cf15062a-7527-4150-98f4-1f37b0ad5271&quot;</span>","value":"#uuid \"cf15062a-7527-4150-98f4-1f37b0ad5271\""}],"value":"[:uuid #uuid \"cf15062a-7527-4150-98f4-1f37b0ad5271\"]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:parent-uuids</span>","value":":parent-uuids"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:parent-uuids nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:genetic-operators</span>","value":":genetic-operators"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:genetic-operators nil]"}],"value":"#clojush.individual.individual{:genome (), :program nil, :errors nil, :total-error nil, :normalized-error nil, :weighted-error nil, :meta-errors nil, :history nil, :ancestors nil, :uuid #uuid \"cf15062a-7527-4150-98f4-1f37b0ad5271\", :parent-uuids nil, :genetic-operators nil}"}
 ;; <=
 
 ;; @@
-(count (distinct flattened-distilled-image))
+(:uniform-deletion-rate @push-argmap)
 ;; @@
 ;; =>
-;;; {"type":"html","content":"<span class='clj-unkown'>44</span>","value":"44"}
+;;; {"type":"html","content":"<span class='clj-double'>0.01</span>","value":"0.01"}
 ;; <=
 
 ;; @@
-(count (blind-combinations (range (* 16 3))))
+(uniform-deletion foo @push-argmap)
 ;; @@
 ;; =>
-;;; {"type":"html","content":"<span class='clj-unkown'>1128</span>","value":"1128"}
+;;; {"type":"list-like","open":"<span class='clj-map'>{</span>","close":"<span class='clj-map'>}</span>","separator":", ","items":[{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:genome</span>","value":":genome"},{"type":"list-like","open":"<span class='clj-lazy-seq'>(</span>","close":"<span class='clj-lazy-seq'>)</span>","separator":" ","items":[],"value":"()"}],"value":"[:genome ()]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:program</span>","value":":program"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:program nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:errors</span>","value":":errors"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:errors nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:total-error</span>","value":":total-error"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:total-error nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:normalized-error</span>","value":":normalized-error"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:normalized-error nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:weighted-error</span>","value":":weighted-error"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:weighted-error nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:meta-errors</span>","value":":meta-errors"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:meta-errors nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:history</span>","value":":history"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:history nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:ancestors</span>","value":":ancestors"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:ancestors nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:uuid</span>","value":":uuid"},{"type":"html","content":"<span class='clj-unkown'>#uuid &quot;78c2fed3-daf4-4470-9e76-61bc65baedc6&quot;</span>","value":"#uuid \"78c2fed3-daf4-4470-9e76-61bc65baedc6\""}],"value":"[:uuid #uuid \"78c2fed3-daf4-4470-9e76-61bc65baedc6\"]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:parent-uuids</span>","value":":parent-uuids"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:parent-uuids nil]"},{"type":"list-like","open":"","close":"","separator":" ","items":[{"type":"html","content":"<span class='clj-keyword'>:genetic-operators</span>","value":":genetic-operators"},{"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}],"value":"[:genetic-operators nil]"}],"value":"#clojush.individual.individual{:genome (), :program nil, :errors nil, :total-error nil, :normalized-error nil, :weighted-error nil, :meta-errors nil, :history nil, :ancestors nil, :uuid #uuid \"78c2fed3-daf4-4470-9e76-61bc65baedc6\", :parent-uuids nil, :genetic-operators nil}"}
+;; <=
+
+;; @@
+(println 
+        (map #(if (< (lrand) 0.01) nil %) 
+             [{:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0}]))
+;; @@
+;; ->
+;;; ({:instruction 0} {:instruction 0} {:instruction 0} {:instruction 0})
+;;; 
+;; <-
+;; =>
+;;; {"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}
+;; <=
+
+;; @@
+(lrand)
+;; @@
+;; =>
+;;; {"type":"html","content":"<span class='clj-double'>0.4490940570071442</span>","value":"0.4490940570071442"}
 ;; <=
 
 ;; @@

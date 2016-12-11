@@ -7,7 +7,7 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [clojush "2.14.0"]]
+                 [clojush "2.15.0"]]
   :plugins [[org.clojars.benfb/lein-gorilla "0.4.0"]]
   :main ^:skip-aot imgfn.core
   :target-path "target/%s"
